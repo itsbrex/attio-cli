@@ -1,8 +1,8 @@
 import { Command } from 'commander';
-import { createInterface } from 'readline';
 import chalk from 'chalk';
 import { AttioClient } from '../client.js';
 import { setApiKey, getConfigPath, isConfigured } from '../config.js';
+import { prompt } from '../prompt.js';
 
 export function register(program: Command): void {
   program
@@ -27,14 +27,10 @@ export function register(program: Command): void {
 
         // Check for existing key
         if (isConfigured()) {
-          const rl = createInterface({ input: process.stdin, output: process.stderr });
-          const overwrite = await new Promise<boolean>(resolve => {
-            rl.question(chalk.yellow('An API key is already configured. Overwrite? [y/N] '), answer => {
-              rl.close();
-              resolve(answer.trim().toLowerCase() === 'y');
-            });
-          });
-          if (!overwrite) {
+          const overwrite = await prompt(
+            chalk.yellow('An API key is already configured. Overwrite? [y/N] '),
+          ).catch(() => '');
+          if (overwrite.trim().toLowerCase() !== 'y') {
             console.error(chalk.dim('Setup cancelled.'));
             return;
           }
@@ -48,18 +44,13 @@ export function register(program: Command): void {
         console.error(`  You'll need an API key from ${chalk.cyan('https://app.attio.com/settings/developers')}`);
         console.error('');
 
-        const rl = createInterface({ input: process.stdin, output: process.stderr });
-        apiKey = await new Promise<string>((resolve, reject) => {
-          rl.question('  Paste your API key: ', answer => {
-            rl.close();
-            resolve(answer);
-          });
-          rl.on('close', () => reject(new Error('cancelled')));
-        }).catch(() => {
+        try {
+          apiKey = await prompt('  Paste your API key: ', { mask: true });
+        } catch {
           // Ctrl+C or closed input
           console.error('');
           process.exit(0);
-        });
+        }
       }
 
       // Clean up the key (trim whitespace, strip surrounding quotes)

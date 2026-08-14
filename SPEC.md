@@ -1030,6 +1030,11 @@ export async function confirm(message: string): Promise<boolean> {
 
 Note: prompts go to stderr so they don't pollute piped output.
 
+Note: `rl.close()` emits `'close'` synchronously. If a prompt also rejects on
+`'close'` to detect Ctrl+C, resolve the answer *before* closing and guard the
+`'close'` handler with an `answered` flag — otherwise every answered prompt
+rejects. See `src/prompt.ts`.
+
 ---
 
 ## Exit Codes
