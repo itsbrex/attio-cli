@@ -29,6 +29,7 @@ import { register as registerMembers } from '../src/commands/members.js';
 import { register as registerConfig } from '../src/commands/config.js';
 import { register as registerOpen } from '../src/commands/open.js';
 import { register as registerInit } from '../src/commands/init.js';
+import { register as registerExport } from '../src/commands/export.js';
 import { isConfigured } from '../src/config.js';
 import { prepareObjectHelp } from '../src/object-metadata.js';
 
@@ -133,6 +134,7 @@ registerMembers(program);
 registerConfig(program);
 registerOpen(program);
 registerInit(program);
+registerExport(program);
 
 // Smart bare invocation: always show help, nudge unconfigured users toward `attio init`
 program.action(() => {

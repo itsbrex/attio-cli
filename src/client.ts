@@ -1,4 +1,6 @@
 import chalk from 'chalk';
+import { createHash } from 'node:crypto';
+import { open, unlink } from 'node:fs/promises';
 import { resolveApiKey } from './config.js';
 import { AttioApiError, AttioAuthError, AttioRateLimitError } from './errors.js';
 
@@ -141,6 +143,70 @@ export class AttioClient {
 
   async get<T>(path: string, options?: RequestOptions): Promise<T> {
     return this.request<T>('GET', path, undefined, options);
+  }
+
+  /** Stream a file without forwarding the API key to the signed download URL. */
+  async downloadFile(fileId: string, destination: string): Promise<{ sha256: string; bytes: number }> {
+    if (!this.apiKey) throw new AttioAuthError('No API key configured');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 300_000);
+    let file: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      let response: Response | undefined;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        response = await fetch(`${BASE_URL}/files/${encodeURIComponent(fileId)}/download`, {
+          headers: { Authorization: `Bearer ${this.apiKey}` }, redirect: 'manual', signal: controller.signal,
+        });
+        if (response.status !== 429) break;
+        await response.body?.cancel();
+        if (attempt === MAX_RETRIES) throw new AttioRateLimitError('File download rate limited');
+        await new Promise(resolve => setTimeout(resolve, Math.max(100, getRetryDelayMs(response!, attempt))));
+      }
+      if (!response) throw new Error('Missing file download response');
+      if (response.status === 401) { await response.body?.cancel(); throw new AttioAuthError('Invalid or expired API key'); }
+      if (response.status >= 400) {
+        const body: any = await response.json().catch(() => ({}));
+        throw new AttioApiError(response.status, body.type ?? 'download_error', body.message ?? 'File download unavailable');
+      }
+      // Redirects are followed manually. Signed URLs and their query strings never enter logs or checkpoints.
+      for (let hop = 0; response.status >= 300 && response.status < 400; hop++) {
+        if (hop >= 5) { await response.body?.cancel(); throw new Error('Too many file download redirects'); }
+        const location: string | null = response.headers.get('location');
+        await response.body?.cancel();
+        if (!location) throw new Error('File download redirect has no location');
+        const url: URL = new URL(location, response.url || BASE_URL);
+        if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Unsafe file download redirect');
+        response = await fetch(url, { redirect: 'manual', signal: controller.signal });
+      }
+      if (!response.ok || !response.body) {
+        await response.body?.cancel();
+        throw new Error(`File download returned HTTP ${response.status}`);
+      }
+      file = await open(destination, 'wx', 0o600);
+      const hash = createHash('sha256');
+      let bytes = 0;
+      const reader = response.body.getReader();
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          hash.update(chunk.value); bytes += chunk.value.byteLength;
+          await file.writeFile(chunk.value);
+        }
+      } finally { await reader.cancel().catch(() => undefined); }
+      const length = response.headers.get('content-length');
+      if (length !== null && !response.headers.get('content-encoding') && Number(length) !== bytes) {
+        throw new Error('File download length mismatch');
+      }
+      await file.sync();
+      return { sha256: hash.digest('hex'), bytes };
+    } catch (error) {
+      if (file) { await file.close(); file = undefined; await unlink(destination).catch(() => undefined); }
+      throw error;
+    } finally {
+      if (file) await file.close();
+      clearTimeout(timer);
+    }
   }
 
   async post<T>(path: string, body?: unknown): Promise<T> {

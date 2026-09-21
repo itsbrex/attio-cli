@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { AttioClient } from '../client.js';
-import { detectFormat, outputList, type OutputFormat } from '../output.js';
+import { detectFormat, outputList, outputSingle, type OutputFormat } from '../output.js';
 
 interface WorkspaceMember {
   id: {
@@ -22,6 +22,21 @@ export function register(program: Command): void {
   const members = program
     .command('members')
     .description('Manage workspace members');
+
+  members
+    .command('get <member-id>')
+    .description('Get a workspace member by ID')
+    .action(async function (this: Command, memberId: string) {
+      const opts = this.optsWithGlobals();
+      const client = new AttioClient(opts.apiKey, opts.debug);
+      const response = await client.get<{ data: WorkspaceMember }>(`/workspace_members/${encodeURIComponent(memberId)}`);
+      const format = detectFormat(opts);
+      if (format === 'csv') {
+        outputList([{ ...response.data, id: response.data.id.workspace_member_id }], {
+          format, columns: ['id', 'first_name', 'last_name', 'email_address', 'access_level'],
+        });
+      } else outputSingle(response.data, { format });
+    });
 
   members
     .command('list')

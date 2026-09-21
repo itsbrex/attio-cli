@@ -8,6 +8,21 @@ export function register(program: Command): void {
     .command('comments')
     .description('Manage comments on records');
 
+  comments
+    .command('get <comment-id>')
+    .description('Get a comment by ID')
+    .action(async function (this: Command, commentId: string) {
+      const opts = this.optsWithGlobals();
+      const client = new AttioClient(opts.apiKey, opts.debug);
+      const response = await client.get<{ data: Record<string, any> }>(`/comments/${encodeURIComponent(commentId)}`);
+      const format = detectFormat(opts);
+      if (format === 'csv') {
+        outputList([{ ...response.data, id: response.data.id?.comment_id }], {
+          format, columns: ['id', 'content_plaintext', 'created_at'],
+        });
+      } else outputSingle(response.data, { format });
+    });
+
   // --- list ---
   comments
     .command('list')

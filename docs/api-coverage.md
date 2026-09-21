@@ -1,6 +1,6 @@
 # Attio CLI API coverage audit
 
-Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.attio.com/openapi/api). The CLI routes **45 of 94 documented method/path pairs**; **49 have no CLI route**. This measures endpoint reachability, not complete parameter support or live validation of every operation.
+Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.attio.com/openapi/api). The CLI routes **53 of 94 documented method/path pairs**; **41 have no CLI route**. This measures endpoint reachability, not complete parameter support or live validation of every operation.
 
 ## Evidence and scope
 
@@ -8,9 +8,9 @@ Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.
 - Upstream SHA-256: `623c79a2e7bf52fe4fc289228153e069d06ac340da73fe16a99da9408b4be380`.
 - Checked-in `openapi.json` SHA-256: `27a1d7f96023f7295f4bfe6f373a1210a2a2b285b78bc808e512c659f091a916`.
 - The checked-in specification has 67 operations. Upstream adds 28 method/path pairs absent from that file. One local entry, `GET /scim/v2/Schemas`, is absent from the current core API document; this does not prove the separate SCIM endpoint was removed from the service.
-- Inspected all command registrations and 52 API client call sites. Resolved dynamic paths and matched every call site to an upstream operation; no unmatched routes remain. Shortcut commands share record operations and are not counted twice.
-- Reviewed the pending workspace-name, request-timeout, and compact-guide changes. No blocking regression was reproduced. `npm test` passed all 49 tests; TypeScript and build passed. Write behavior was tested with mocks. Live verification used metadata/record reads only.
-- This audit does not refresh `openapi.json`, add missing commands, change authentication, or perform CRM writes.
+- The original audit inspected all command registrations and 52 API client call sites. This update adds eight reachable operations through attribute/member/comment reads and the export command (including its streamed file-download method). Dynamic attribute paths support both object and list targets. Shortcut commands and export reuse of existing routes are counted once.
+- The earlier workspace-name, timeout, and compact-guide review passed 49 tests. With the export and new read commands, `npm test` passes 68 tests; TypeScript and build pass. Tests exercise interruption/resume (including a killed process), legacy-export preservation, 10,001 records, checksums, workspace/scope guards, cursor pagination, blocked resources, binary download redirects, and read-command output. Existing write behavior is tested only with mocks.
+- The resumable export and new read commands add read coverage without changing authentication or performing CRM writes. The checked-in `openapi.json` remains unchanged; the current upstream document is the implementation reference.
 
 ## Coverage by API group
 
@@ -19,38 +19,38 @@ Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.
 | Objects | 2 | 6 | 4 |
 | Activities | 0 | 5 | 5 |
 | Activity records | 0 | 6 | 6 |
-| Attributes | 1 | 10 | 9 |
+| Attributes | 4 | 10 | 6 |
 | Records | 9 | 12 | 3 |
 | SQL | 0 | 1 | 1 |
 | Lists | 2 | 5 | 3 |
 | Entries | 6 | 9 | 3 |
-| Workspace members | 1 | 2 | 1 |
+| Workspace members | 2 | 2 | 0 |
 | Notes | 4 | 5 | 1 |
 | Tasks | 5 | 5 | 0 |
 | Threads | 2 | 2 | 0 |
-| Comments | 2 | 3 | 1 |
-| Emails | 0 | 1 | 1 |
+| Comments | 3 | 3 | 0 |
+| Emails | 1 | 1 | 0 |
 | Sequences | 0 | 1 | 1 |
 | Meetings | 2 | 4 | 2 |
 | Call recordings | 2 | 4 | 2 |
 | Transcripts | 1 | 1 | 0 |
-| Files | 0 | 6 | 6 |
+| Files | 2 | 6 | 4 |
 | Webhooks | 5 | 5 | 0 |
 | Meta | 1 | 1 | 0 |
-| **Total** | **45** | **94** | **49** |
+| **Total** | **53** | **94** | **41** |
 
 ## Relevant gaps and limitations
 
-- **Full exports:** the shared [`paginate` helper](../src/pagination.ts) stops `--all` after 10,000 records and prints a warning. It returns successfully with that partial set. Use explicit `--limit`/`--offset` requests until an empty page for larger exports. JSON record output preserves the full record body and current `values`; table/CSV output is presentation-oriented.
-- **Partial attribute target support:** the routed attribute-list operation only exposes the `objects` target. There is no list-attribute command, attribute detail command, or select-option/status management.
+- **Full exports:** [`attio export`](export.md) has no record-count cap, supports durable resume, exports related resources, and reports incomplete resources with a nonzero exit. The shared [`paginate` helper](../src/pagination.ts) still stops interactive `--all` commands after 10,000 records with a warning. Table/CSV output is presentation-oriented.
+- **Attribute reads:** listing, detail, select options, and statuses support both `objects` and `lists`. Listing supports pagination and archived definitions. Attribute/option/status writes remain missing.
 - **Update semantics:** record and list-entry updates expose PATCH, which appends multiselect values. Their PUT overwrite operations are missing. Record merge and record/list-entry attribute-value writes are also missing.
-- **Read coverage:** missing individual member/comment reads, list-entry attribute-value reads, saved views, emails, files, activities/activity records, and SQL. Existing recording transcript retrieval uses an operation marked deprecated upstream.
+- **Read coverage:** list-entry attribute-value reads, saved views, individual file detail, activities/activity records, and SQL remain missing. Email metadata and file listing/downloads are reachable through export, subject to access and documented API limits. Existing recording transcript retrieval uses an operation marked deprecated upstream.
 - **Options:** record/list-entry queries do not expose `filter_view_id`. Presence of a route therefore does not imply full request-schema parity.
 - **Remaining writes:** no object/list configuration writes, note update, meeting create/delete, recording create/delete, or sequence unsubscribe command.
 
 ## Complete operation inventory
 
-`Routed` means an existing CLI action reaches that method/path. The source column identifies one call site; some operations have multiple callers. For attribute listing, see the target limitation above.
+`Routed` means an existing CLI action reaches that method/path. The source column identifies one call site; some operations have multiple callers. Export-only routes are identified in the source column; they do not imply a standalone resource command.
 
 | Method | Upstream path | Status | Source |
 | --- | --- | --- | --- |
@@ -71,14 +71,14 @@ Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.
 | `PATCH` | `/v2/activities/{activity}/records/{record_id}` | Missing | — |
 | `PUT` | `/v2/activities/{activity}/records/{record_id}` | Missing | — |
 | `DELETE` | `/v2/activities/{activity}/records/{record_id}` | Missing | — |
-| `GET` | `/v2/{target}/{identifier}/attributes` | Routed | [src/commands/attributes.ts:24](../src/commands/attributes.ts#L24) |
+| `GET` | `/v2/{target}/{identifier}/attributes` | Routed | [src/commands/attributes.ts](../src/commands/attributes.ts) |
 | `POST` | `/v2/{target}/{identifier}/attributes` | Missing | — |
-| `GET` | `/v2/{target}/{identifier}/attributes/{attribute}` | Missing | — |
+| `GET` | `/v2/{target}/{identifier}/attributes/{attribute}` | Routed | [src/commands/attributes.ts](../src/commands/attributes.ts) |
 | `PATCH` | `/v2/{target}/{identifier}/attributes/{attribute}` | Missing | — |
-| `GET` | `/v2/{target}/{identifier}/attributes/{attribute}/options` | Missing | — |
+| `GET` | `/v2/{target}/{identifier}/attributes/{attribute}/options` | Routed | [src/commands/attributes.ts](../src/commands/attributes.ts) |
 | `POST` | `/v2/{target}/{identifier}/attributes/{attribute}/options` | Missing | — |
 | `PATCH` | `/v2/{target}/{identifier}/attributes/{attribute}/options/{option}` | Missing | — |
-| `GET` | `/v2/{target}/{identifier}/attributes/{attribute}/statuses` | Missing | — |
+| `GET` | `/v2/{target}/{identifier}/attributes/{attribute}/statuses` | Routed | [src/commands/attributes.ts](../src/commands/attributes.ts) |
 | `POST` | `/v2/{target}/{identifier}/attributes/{attribute}/statuses` | Missing | — |
 | `PATCH` | `/v2/{target}/{identifier}/attributes/{attribute}/statuses/{status}` | Missing | — |
 | `POST` | `/v2/objects/{object}/records/query` | Routed | [src/commands/records.ts:69](../src/commands/records.ts#L69) |
@@ -108,8 +108,8 @@ Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.
 | `DELETE` | `/v2/lists/{list}/entries/{entry_id}` | Routed | [src/commands/entries.ts:206](../src/commands/entries.ts#L206) |
 | `GET` | `/v2/lists/{list}/entries/{entry_id}/attributes/{attribute}/values` | Missing | — |
 | `PUT` | `/v2/lists/{list}/entries/{entry_id}/attributes/{attribute}/values` | Missing | — |
-| `GET` | `/v2/workspace_members` | Routed | [src/commands/members.ts:34](../src/commands/members.ts#L34) |
-| `GET` | `/v2/workspace_members/{workspace_member_id}` | Missing | — |
+| `GET` | `/v2/workspace_members` | Routed | [src/commands/members.ts](../src/commands/members.ts) |
+| `GET` | `/v2/workspace_members/{workspace_member_id}` | Routed | [src/commands/members.ts](../src/commands/members.ts) |
 | `GET` | `/v2/notes` | Routed | [src/commands/notes.ts:30](../src/commands/notes.ts#L30) |
 | `POST` | `/v2/notes` | Routed | [src/commands/notes.ts:97](../src/commands/notes.ts#L97) |
 | `GET` | `/v2/notes/{note_id}` | Routed | [src/commands/notes.ts:70](../src/commands/notes.ts#L70) |
@@ -120,12 +120,12 @@ Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.
 | `GET` | `/v2/tasks/{task_id}` | Routed | [src/commands/tasks.ts:73](../src/commands/tasks.ts#L73) |
 | `PATCH` | `/v2/tasks/{task_id}` | Routed | [src/commands/tasks.ts:143](../src/commands/tasks.ts#L143) |
 | `DELETE` | `/v2/tasks/{task_id}` | Routed | [src/commands/tasks.ts:167](../src/commands/tasks.ts#L167) |
-| `GET` | `/v2/threads` | Routed | [src/commands/comments.ts:30](../src/commands/comments.ts#L30) |
+| `GET` | `/v2/threads` | Routed | [src/commands/comments.ts](../src/commands/comments.ts) |
 | `GET` | `/v2/threads/{thread_id}` | Routed | [src/commands/threads.ts:84](../src/commands/threads.ts#L84) |
-| `POST` | `/v2/comments` | Routed | [src/commands/comments.ts:112](../src/commands/comments.ts#L112) |
-| `GET` | `/v2/comments/{comment_id}` | Missing | — |
-| `DELETE` | `/v2/comments/{comment_id}` | Routed | [src/commands/comments.ts:133](../src/commands/comments.ts#L133) |
-| `GET` | `/v2/emails` | Missing | — |
+| `POST` | `/v2/comments` | Routed | [src/commands/comments.ts](../src/commands/comments.ts) |
+| `GET` | `/v2/comments/{comment_id}` | Routed | [src/commands/comments.ts](../src/commands/comments.ts) |
+| `DELETE` | `/v2/comments/{comment_id}` | Routed | [src/commands/comments.ts](../src/commands/comments.ts) |
+| `GET` | `/v2/emails` | Routed | [src/export.ts](../src/export.ts) |
 | `POST` | `/v2/sequences/unsubscribed_emails` | Missing | — |
 | `GET` | `/v2/meetings` | Routed | [src/commands/meetings.ts:38](../src/commands/meetings.ts#L38) |
 | `POST` | `/v2/meetings` | Missing | — |
@@ -136,28 +136,27 @@ Audited 2026-09-21 UTC against the current [Attio OpenAPI document](https://api.
 | `GET` | `/v2/meetings/{meeting_id}/call_recordings/{call_recording_id}` | Routed | [src/commands/recordings.ts:125](../src/commands/recordings.ts#L125) |
 | `DELETE` | `/v2/meetings/{meeting_id}/call_recordings/{call_recording_id}` | Missing | — |
 | `GET` | `/v2/meetings/{meeting_id}/call_recordings/{call_recording_id}/transcript` | Routed | [src/commands/recordings.ts:58](../src/commands/recordings.ts#L58) |
-| `GET` | `/v2/files` | Missing | — |
+| `GET` | `/v2/files` | Routed | [src/export.ts](../src/export.ts) |
 | `POST` | `/v2/files` | Missing | — |
 | `POST` | `/v2/files/upload` | Missing | — |
 | `GET` | `/v2/files/{file_id}` | Missing | — |
 | `DELETE` | `/v2/files/{file_id}` | Missing | — |
-| `GET` | `/v2/files/{file_id}/download` | Missing | — |
+| `GET` | `/v2/files/{file_id}/download` | Routed | [src/client.ts](../src/client.ts) |
 | `GET` | `/v2/webhooks` | Routed | [src/commands/webhooks.ts:113](../src/commands/webhooks.ts#L113) |
 | `POST` | `/v2/webhooks` | Routed | [src/commands/webhooks.ts:173](../src/commands/webhooks.ts#L173) |
 | `GET` | `/v2/webhooks/{webhook_id}` | Routed | [src/commands/webhooks.ts:143](../src/commands/webhooks.ts#L143) |
 | `PATCH` | `/v2/webhooks/{webhook_id}` | Routed | [src/commands/webhooks.ts:218](../src/commands/webhooks.ts#L218) |
 | `DELETE` | `/v2/webhooks/{webhook_id}` | Routed | [src/commands/webhooks.ts:238](../src/commands/webhooks.ts#L238) |
-| `GET` | `/v2/self` | Routed | [src/commands/comments.ts:91](../src/commands/comments.ts#L91) |
+| `GET` | `/v2/self` | Routed | [src/commands/comments.ts](../src/commands/comments.ts) |
 
 ## Sensible next implementation batches
 
-1. Add a resumable full-export command with explicit completion reporting; preserve the existing `--all` safety behavior until its contract is deliberately changed.
-2. Add missing read commands for attribute details/options/statuses, list attributes, member/comment detail, saved views, and list-entry values.
-3. Add explicit overwrite update modes and note updates, then expand new resource families.
-4. Add a reproducible upstream specification comparison in CI so new operations become visible without claiming automatic implementation coverage.
+1. Add list-entry attribute-value reads, saved views, and individual file detail.
+2. Add explicit overwrite update modes and note updates, then expand new resource families.
+3. Add a reproducible upstream specification comparison in CI so new operations become visible without claiming automatic implementation coverage.
 
 ## Workspace export verification
 
-Private exports live under git-ignored `.attio-workspace/`. The export workflow uses the existing API client, explicit 500-record pages, and no record-count cap. Each object must reach an empty page in two opposite-order scans with identical unique record IDs before its final JSON file is published. The local manifest records page hashes, counts, time ranges, object/workspace identity, and final file hashes.
+Private exports live under git-ignored `.attio-workspace/`. The permanent [`attio export` command](export.md) uses the existing API client, explicit pages, and no record-count cap. Each object must reach an empty page in two opposite-order scans with identical unique record IDs before its JSON file is published. The manifest records resource status, counts, object/workspace identity, output hashes, and limitations; hashed request checkpoints support resume.
 
-Exports contain complete current record payloads returned by the record-query endpoint. Related notes, emails, files, tasks, list-entry values, and historical attribute values are separate API resources. Offset pagination does not provide a transactional snapshot; matching scans verifies stable observed record membership, not a single instant of all attribute values. See [record queries](https://docs.attio.com/rest-api/endpoint-reference/records/list-records) and [pagination](https://docs.attio.com/rest-api/guides/pagination).
+The command also exports active attribute definitions/options/statuses, related note bodies, accessible email metadata, file/folder metadata, and available file bytes. Email bodies, historical attribute values, list-entry values, and note images are outside this API export scope. Offset pagination provides no transactional snapshot; matching record scans verifies stable observed membership, not simultaneous attribute values. See the [export guide](export.md) for exact coverage and failure semantics.

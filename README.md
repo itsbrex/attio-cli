@@ -91,7 +91,12 @@ and Workspaces. Their standard object slugs stay fixed. See
 | `attio objects list` | List all objects in the workspace |
 | `attio objects get <slug>` | Get details for a specific object |
 | **Attributes** | |
-| `attio attributes list <object>` | List attributes for an object |
+| `attio attributes list <identifier>` | List object or list attributes; supports `--target lists`, `--all`, and `--show-archived` |
+| `attio attributes get <identifier> <attribute>` | Get an attribute definition; supports `--target lists` |
+| `attio attributes options <identifier> <attribute>` | List active select options (default cap 100; `--limit` changes it) |
+| `attio attributes statuses <identifier> <attribute>` | List active statuses (default cap 100; `--limit` changes it) |
+| **Export** | |
+| `attio export <objects...>` | Export full records and related data; supports `--dir`, `--include`, and `--resume` |
 | **Records** | |
 | `attio records list <object>` | List records for an object |
 | `attio records get <object> <id>` | Get a specific record |
@@ -166,6 +171,7 @@ and Workspaces. Their standard object slugs stay fixed. See
 | `attio notes delete <id>` | Delete a note |
 | **Comments** | |
 | `attio comments list` | List comments on a thread |
+| `attio comments get <id>` | Get a comment by ID |
 | `attio comments create` | Create a comment |
 | `attio comments delete <id>` | Delete a comment |
 | **Threads** | |
@@ -186,6 +192,7 @@ and Workspaces. Their standard object slugs stay fixed. See
 | `attio webhooks delete <id>` | Delete a webhook |
 | **Members** | |
 | `attio members list` | List workspace members |
+| `attio members get <id>` | Get a workspace member by ID |
 | **Config** | |
 | `attio config set <key> <value>` | Set a config value |
 | `attio config get <key>` | Get a config value |
@@ -246,12 +253,21 @@ attio people list --sort name.last_name:desc
 ID=$(attio records create companies --set name="Acme" --set domains='["acme.com"]' -q)
 attio notes create --object companies --record $ID --title "New lead" --content "From website"
 
-# Export all companies to JSON
-attio records list companies --all --json > companies.json
+# Export all companies without a record-count cap, with durable checkpoints
+attio export companies --include records --dir .attio-workspace/companies
 
 # Pipe to jq
 attio records list companies --all --json | jq -r '.[].values.name[0].value'
 ```
+
+For full records, active attribute definitions, up to 100 active choices per attribute, notes, email metadata, and file downloads, use:
+
+```bash
+attio export people companies deals locations --dir .attio-workspace/full
+attio export people companies deals locations --dir .attio-workspace/full --resume
+```
+
+See the [resumable export guide](docs/export.md) for file layout, access requirements, and API limits. Email bodies and attachments are not exposed by Attio's email API. Blocked resources remain explicit in the manifest and cause a nonzero exit; other resources can still finish. Existing `records list --all` remains capped at 10,000 records.
 
 ```bash
 # Bulk update from a CSV
