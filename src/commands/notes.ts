@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AttioClient } from '../client.js';
 import { detectFormat, outputList, outputSingle, confirm, type OutputFormat } from '../output.js';
+import { labelObjectColumn } from '../object-metadata.js';
 
 export function register(program: Command): void {
   const notes = program
@@ -49,7 +50,8 @@ export function register(program: Command): void {
         created_at: n.created_at || '',
       }));
 
-      outputList(flat, {
+      const rows = format === 'table' ? await labelObjectColumn(client, flat, 'parent_object') : flat;
+      outputList(rows, {
         format,
         columns: ['id', 'title', 'parent_object', 'parent_record_id', 'created_at'],
         idField: 'id',
@@ -66,7 +68,8 @@ export function register(program: Command): void {
       const format: OutputFormat = detectFormat(opts);
 
       const res = await client.get<{ data: any }>(`/notes/${encodeURIComponent(noteId)}`);
-      outputSingle(res.data, { format, idField: 'id' });
+      const [row] = format === 'table' ? await labelObjectColumn(client, [res.data], 'parent_object') : [res.data];
+      outputSingle(row, { format, idField: 'id' });
     });
 
   // --- create ---
@@ -92,7 +95,8 @@ export function register(program: Command): void {
       };
 
       const res = await client.post<{ data: any }>('/notes', { data: body });
-      outputSingle(res.data, { format, idField: 'id' });
+      const [row] = format === 'table' ? await labelObjectColumn(client, [res.data], 'parent_object') : [res.data];
+      outputSingle(row, { format, idField: 'id' });
     });
 
   // --- delete ---

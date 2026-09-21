@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AttioClient } from '../client.js';
 import { detectFormat, outputList, outputSingle, type OutputFormat } from '../output.js';
+import { labelObjectColumn } from '../object-metadata.js';
 
 export function register(program: Command): void {
   const cmd = program
@@ -37,7 +38,8 @@ export function register(program: Command): void {
         parent_object: l.parent_object || '',
       }));
 
-      outputList(flat, {
+      const rows = format === 'table' ? await labelObjectColumn(client, flat, 'parent_object') : flat;
+      outputList(rows, {
         format,
         columns: ['id', 'api_slug', 'name', 'parent_object'],
         idField: 'id',
@@ -70,6 +72,7 @@ export function register(program: Command): void {
         created_by_actor_id: listData.created_by_actor?.id || '',
       };
 
-      outputSingle(flat, { format, idField: 'id' });
+      const [row] = format === 'table' ? await labelObjectColumn(client, [flat], 'parent_object') : [flat];
+      outputSingle(row, { format, idField: 'id' });
     });
 }

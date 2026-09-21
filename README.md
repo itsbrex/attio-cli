@@ -55,6 +55,32 @@ To let AI agents (Claude, etc.) discover this CLI, append the auto-generated sni
 attio config claude-md >> CLAUDE.md
 ```
 
+## Renamed objects
+
+The CLI discovers object names from your current workspace. Help descriptions,
+record tables, delete confirmations, and the generated agent snippet show names
+such as **Opportunities** for `deals` or **Leads** for `users`.
+
+Command names, object arguments, API paths, search scopes, and record references
+still use the API slug. Display names are not command aliases:
+
+```bash
+attio objects list                 # See current display names and API slugs
+attio deals list --table           # Opportunities, if renamed in your workspace
+attio records list users --table   # Leads, if renamed in your workspace
+attio deals --help                 # Workspace-aware command descriptions
+```
+
+Names are fetched when needed, without a persistent cache. Optional name discovery
+uses `object_configuration:read`, a 1.5-second timeout, and no retries; unavailable
+metadata falls back to slugs or default help descriptions. JSON, CSV, and quiet
+record output keep their existing shape and do not request presentation metadata.
+Cross-object search still discovers object slugs when no scope is supplied.
+
+Attio supports renaming the singular and plural display names of Deals, Users,
+and Workspaces. Their standard object slugs stay fixed. See
+[Attio's standard-object documentation](https://attio.com/help/reference/managing-your-data/objects/manage-standard-objects).
+
 ## Command Reference
 
 | Command | Description |

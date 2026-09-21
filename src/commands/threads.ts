@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AttioClient } from '../client.js';
 import { detectFormat, outputList, outputSingle, type OutputFormat } from '../output.js';
+import { labelObjectColumn } from '../object-metadata.js';
 
 function flattenThread(thread: any): Record<string, string | number> {
   return {
@@ -63,7 +64,9 @@ export function register(program: Command): void {
         return;
       }
 
-      outputList(threads.map(flattenThread), {
+      const flat = threads.map(flattenThread);
+      const rows = format === 'table' ? await labelObjectColumn(client, flat, 'object') : flat;
+      outputList(rows, {
         format,
         columns: ['id', 'object', 'record_id', 'list', 'entry_id', 'comments', 'created_at'],
         idField: 'id',
@@ -86,6 +89,8 @@ export function register(program: Command): void {
         return;
       }
 
-      outputSingle(flattenThread(thread), { format, idField: 'id' });
+      const flat = flattenThread(thread);
+      const [row] = format === 'table' ? await labelObjectColumn(client, [flat], 'object') : [flat];
+      outputSingle(row, { format, idField: 'id' });
     });
 }

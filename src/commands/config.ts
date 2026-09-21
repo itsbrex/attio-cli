@@ -1,6 +1,8 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { resolveApiKey, setApiKey, getConfigPath } from '../config.js';
+import { AttioClient } from '../client.js';
+import { discoverObjects, workspaceObjectGuide } from '../object-metadata.js';
 
 export function register(program: Command): void {
   const cmd = program
@@ -48,14 +50,34 @@ export function register(program: Command): void {
   cmd
     .command('claude-md')
     .description('Print a CLAUDE.md snippet for AI agent discovery')
-    .action(() => {
-      console.log(CLAUDE_MD_SNIPPET);
+    .option('--compact', 'Print core rules, live object names, and command-help pointers')
+    .action(async function (this: Command) {
+      const opts = this.optsWithGlobals();
+      const objects = await discoverObjects(new AttioClient(opts.apiKey, opts.debug));
+      const snippet = opts.compact ? COMPACT_CLAUDE_MD_SNIPPET : CLAUDE_MD_SNIPPET;
+      console.log(snippet.replace('### Discovery & setup', `${workspaceObjectGuide(objects)}\n\n### Discovery & setup`));
     });
 }
 
+const AUTHORIZATION_GUIDANCE = 'Use the `attio` CLI for Attio CRM operations. Reads are the default; writes require explicit user authorization. Pass `--yes` on deletes only after the user explicitly authorizes the exact target and scope; the flag skips a prompt, not approval.';
+
+const COMPACT_CLAUDE_MD_SNIPPET = `## Attio CLI (\`attio\`)
+
+${AUTHORIZATION_GUIDANCE}
+
+### Discovery & setup
+
+Run \`attio --help\`, \`attio <group> --help\`, then \`attio <group> <command> --help\` for syntax and options. Check attributes with \`attio attributes list <object>\`.
+
+Search: \`attio records search <query> --object <api-slug>\` (repeat \`--object\` to add objects; omit to search all).
+
+Output: \`--json\`, \`--csv\`, \`--table\`, or \`-q\` for IDs. Defaults: table in a terminal, JSON when piped.
+
+Refresh this guide with \`attio config claude-md --compact\`; omit \`--compact\` for examples.`;
+
 const CLAUDE_MD_SNIPPET = `## Attio CLI (\`attio\`)
 
-Use the \`attio\` CLI for all Attio CRM operations. Always pass \`--yes\` on delete commands to avoid interactive prompts.
+${AUTHORIZATION_GUIDANCE}
 
 ### Discovery & setup
 
@@ -76,7 +98,7 @@ attio records create <object> --set key=value [--set key2=value2]
 attio records update <object> <record-id> --set key=value
 attio records delete <object> <record-id> --yes
 attio records upsert <object> --match <attr-slug> --set key=value
-attio records search <object> <query>
+attio records search <query> [--object <api-slug>] [--limit N]
 \`\`\`
 
 ### Shortcuts
@@ -84,6 +106,9 @@ attio records search <object> <query>
 \`\`\`
 attio people list|get|create|update|delete|search    (same as: records ... people)
 attio companies list|get|create|update|delete|search (same as: records ... companies)
+attio deals list|get|create|update|delete|search     (same as: records ... deals)
+attio users list|get|create|update|delete|search     (same as: records ... users)
+attio workspaces list|get|create|update|delete|search (same as: records ... workspaces)
 \`\`\`
 
 ### Lists & entries

@@ -30,6 +30,7 @@ import { register as registerConfig } from '../src/commands/config.js';
 import { register as registerOpen } from '../src/commands/open.js';
 import { register as registerInit } from '../src/commands/init.js';
 import { isConfigured } from '../src/config.js';
+import { prepareObjectHelp } from '../src/object-metadata.js';
 
 function loadCliVersion(): string {
   try {
@@ -150,7 +151,9 @@ program.action(() => {
 });
 
 // Parse and run
-program.parseAsync(process.argv).catch(handleError);
+prepareObjectHelp(program, process.argv.slice(2))
+  .then(() => program.parseAsync(process.argv))
+  .catch(handleError);
 
 // Also handle uncaught exceptions
 process.on('uncaughtException', handleError);

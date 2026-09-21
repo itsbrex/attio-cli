@@ -4,6 +4,7 @@ import { detectFormat, outputList, outputSingle, confirm, type OutputFormat } fr
 import { parseFilterFlag, combineFilters, parseSort } from '../filters.js';
 import { flattenRecord, flattenValue, resolveValues, requireValues } from '../values.js';
 import { paginate } from '../pagination.js';
+import { discoverObjects, objectLabel, objectMetadata, recordHeading, type ObjectMetadata } from '../object-metadata.js';
 
 function parseLimit(value: unknown, fallback: number): number {
   const parsed = Number(value);
@@ -87,6 +88,7 @@ export async function listRecords(object: string, cmdOpts: any): Promise<void> {
   }
 
   const flat = records.map(flattenRecord);
+  if (format === 'table') await recordHeading(client, object, true);
   outputList(flat, { format });
 }
 
@@ -109,6 +111,7 @@ export async function getRecord(object: string, recordId: string, cmdOpts: any):
     return;
   }
 
+  if (format === 'table') await recordHeading(client, object);
   outputSingle(flattenRecord(record), { format });
 }
 
@@ -134,6 +137,7 @@ export async function createRecord(object: string, cmdOpts: any): Promise<void> 
     return;
   }
 
+  if (format === 'table') await recordHeading(client, object);
   outputSingle(flattenRecord(record), { format });
 }
 
@@ -159,21 +163,22 @@ export async function updateRecord(object: string, recordId: string, cmdOpts: an
     return;
   }
 
+  if (format === 'table') await recordHeading(client, object);
   outputSingle(flattenRecord(record), { format });
 }
 
 export async function deleteRecord(object: string, recordId: string, cmdOpts: any): Promise<void> {
   const yes = cmdOpts.yes ?? false;
+  const client = new AttioClient(cmdOpts.apiKey, cmdOpts.debug);
 
   if (!yes) {
-    const ok = await confirm(`Delete record ${recordId} from ${object}?`);
+    const label = objectLabel(await discoverObjects(client), object);
+    const ok = await confirm(`Delete record ${recordId} from ${label}?`);
     if (!ok) {
       console.error('Aborted.');
       return;
     }
   }
-
-  const client = new AttioClient(cmdOpts.apiKey, cmdOpts.debug);
 
   await client.delete(
     `/objects/${encodeURIComponent(object)}/records/${encodeURIComponent(recordId)}`,
@@ -209,6 +214,7 @@ export async function assertRecord(object: string, cmdOpts: any): Promise<void> 
     return;
   }
 
+  if (format === 'table') await recordHeading(client, object);
   outputSingle(flattenRecord(record), { format });
 }
 
@@ -219,9 +225,11 @@ export async function searchRecords(query: string, cmdOpts: any, objectScope?: s
 
   const optionObjects = (cmdOpts.object as string[] | undefined) ?? [];
   let objects = objectScope && objectScope.length > 0 ? objectScope : optionObjects;
+  let metadata: ObjectMetadata[] | undefined;
 
   if (objects.length === 0) {
     const objectsRes = await client.get<{ data: any[] }>('/objects');
+    metadata = objectMetadata(objectsRes.data);
     objects = objectsRes.data
       .map((obj) => obj.api_slug)
       .filter((slug): slug is string => typeof slug === 'string' && slug.length > 0);
@@ -255,7 +263,13 @@ export async function searchRecords(query: string, cmdOpts: any, objectScope?: s
     return;
   }
 
-  const flat = records.map(flattenRecord);
+  const names = format === 'table' ? metadata ?? await discoverObjects(client) : [];
+  const flat = records.map(record => {
+    const values = flattenRecord(record);
+    if (format !== 'table') return values;
+    const object = record.id?.object_id || (objects.length === 1 ? objects[0] : '');
+    return { object: objectLabel(names, object), ...values };
+  });
   outputList(flat, { format });
 }
 
@@ -317,6 +331,7 @@ async function listRecordValues(object: string, recordId: string, cmdOpts: any):
     created_by_id: value.created_by_actor?.id || '',
   }));
 
+  if (format === 'table') await recordHeading(client, object);
   outputList(flat, {
     format,
     columns: ['attribute', 'value', 'active_from', 'active_until', 'created_by_type', 'created_by_id'],
@@ -359,6 +374,7 @@ async function listRecordEntries(object: string, recordId: string, cmdOpts: any)
   }
 
   const flat = entries.map(flattenEntry);
+  if (format === 'table') await recordHeading(client, object);
   outputList(flat, { format, idField: 'id' });
 }
 

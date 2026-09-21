@@ -7,6 +7,11 @@ const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+interface RequestOptions {
+  timeoutMs?: number;
+  maxRetries?: number;
+}
+
 function getRetryDelayMs(response: Response, attempt: number): number {
   const retryAfter = response.headers.get('retry-after');
   if (retryAfter) {
@@ -33,8 +38,10 @@ export class AttioClient {
     this.debug = debug ?? false;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, options: RequestOptions = {}): Promise<T> {
     const url = `${BASE_URL}${path}`;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxRetries = options.maxRetries ?? MAX_RETRIES;
 
     if (this.debug) {
       console.error(chalk.dim(`→ ${method} ${url}`));
@@ -57,27 +64,26 @@ export class AttioClient {
       init.body = JSON.stringify(body);
     }
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       let response: Response;
       try {
         response = await fetch(url, { ...init, signal: controller.signal });
       } catch (err: any) {
         clearTimeout(timer);
         if (err?.name === 'AbortError') {
-          throw new Error(`Request timed out after ${DEFAULT_TIMEOUT_MS / 1000}s: ${method} ${path}`);
+          throw new Error(`Request timed out after ${timeoutMs / 1000}s: ${method} ${path}`);
         }
         throw err;
       }
-      clearTimeout(timer);
-
       if (this.debug) {
         console.error(chalk.dim(`← ${response.status} ${response.statusText}`));
       }
 
       if (response.status === 429) {
-        if (attempt < MAX_RETRIES) {
+        clearTimeout(timer);
+        if (attempt < maxRetries) {
           const backoff = Math.max(100, getRetryDelayMs(response, attempt));
           if (this.debug) {
             console.error(chalk.dim(`  retrying in ${backoff}ms`));
@@ -85,18 +91,30 @@ export class AttioClient {
           await new Promise((resolve) => setTimeout(resolve, backoff));
           continue;
         }
-        throw new AttioRateLimitError('Rate limited after 3 retries');
+        throw new AttioRateLimitError(`Rate limited after ${maxRetries} retries`);
       }
 
       if (response.status === 401) {
+        clearTimeout(timer);
         throw new AttioAuthError('Invalid or expired API key');
       }
 
       if (response.status === 204) {
+        clearTimeout(timer);
         return undefined as T;
       }
 
-      const json = await response.json();
+      let json: any;
+      try {
+        json = await response.json();
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          throw new Error(`Request timed out after ${timeoutMs / 1000}s: ${method} ${path}`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (this.debug && !response.ok) {
         console.error(chalk.dim(`  error: ${JSON.stringify(json)}`));
@@ -118,11 +136,11 @@ export class AttioClient {
     }
 
     // Should not reach here, but just in case
-    throw new AttioRateLimitError('Rate limited after 3 retries');
+    throw new AttioRateLimitError(`Rate limited after ${maxRetries} retries`);
   }
 
-  async get<T>(path: string): Promise<T> {
-    return this.request<T>('GET', path);
+  async get<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>('GET', path, undefined, options);
   }
 
   async post<T>(path: string, body?: unknown): Promise<T> {

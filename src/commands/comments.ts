@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AttioClient } from '../client.js';
 import { detectFormat, outputList, outputSingle, confirm, type OutputFormat } from '../output.js';
+import { recordHeading } from '../object-metadata.js';
 
 export function register(program: Command): void {
   const comments = program
@@ -64,6 +65,7 @@ export function register(program: Command): void {
         }
       }
 
+      if (format === 'table') await recordHeading(client, opts.object);
       outputList(flat, {
         format,
         columns: ['thread_id', 'author', 'content', 'created_at'],

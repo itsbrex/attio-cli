@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AttioClient } from '../client.js';
 import { detectFormat, outputList, type OutputFormat } from '../output.js';
+import { recordHeading } from '../object-metadata.js';
 
 interface AttributesListResponse {
   data: Record<string, any>[];
@@ -25,6 +26,7 @@ export function register(program: Command): void {
       );
       const items = response.data;
 
+      if (format === 'table') await recordHeading(client, object, true);
       outputList(items, {
         format,
         columns: ['api_slug', 'title', 'type', 'is_required', 'is_unique', 'is_multiselect'],
