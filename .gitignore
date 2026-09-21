@@ -3,3 +3,6 @@ dist/
 .env
 *.tgz
 .DS_Store
+
+# Private Attio workspace exports
+/.attio-workspace/
